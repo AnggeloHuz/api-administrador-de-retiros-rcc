@@ -7,7 +7,8 @@ import { rateLimiter } from './middlewares/rateLimiter.middleware.js';
 import { notFoundHandler } from './middlewares/notFound.middleware.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 import { apiRouter } from './routes/index.js';
-import { healthRoutes } from './modules/health/health.routes.js';
+import { healthRoutes } from './routes/health.routes.js';
+import { setupSwagger } from './config/swagger.js';
 
 const app = express();
 
@@ -15,8 +16,12 @@ const app = express();
    1. MIDDLEWARES DE SEGURIDAD Y CONFIGURACIÓN BÁSICA
    ========================================================================== */
 
-// Configuración de cabeceras de seguridad HTTP
-app.use(helmet());
+// Configuración de cabeceras de seguridad HTTP (CSP desactivado para renderizar Swagger UI)
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
 
 // Configuración de CORS (Cross-Origin Resource Sharing)
 const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
@@ -42,7 +47,12 @@ app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 /* ==========================================================================
-   2. RUTAS PÚBLICAS Y DE SALUD
+   2. DOCUMENTACIÓN INTERACTIVA CON SWAGGER OPENAPI
+   ========================================================================== */
+setupSwagger(app);
+
+/* ==========================================================================
+   3. RUTAS PÚBLICAS Y DE SALUD
    ========================================================================== */
 
 // Endpoint rápido de salud en la raíz (ideal para Load Balancers / Kubernetes / AWS ALB)
@@ -54,19 +64,19 @@ app.get('/', (req, res) => {
     name: 'API-ADMIN-RETIROS',
     version: '1.0.0',
     status: 'online',
-    documentation: `${env.API_PREFIX}/health`,
+    documentation: `${env.API_PREFIX}/docs`,
   });
 });
 
 /* ==========================================================================
-   3. RUTAS PRINCIPALES DE LA API
+   4. RUTAS PRINCIPALES DE LA API
    ========================================================================== */
 
 // Aplicar limitador de tasa y montar enrutador principal bajo el prefijo (ej: /api/v1)
 app.use(env.API_PREFIX, rateLimiter, apiRouter);
 
 /* ==========================================================================
-   4. MANEJO DE RUTAS NO ENCONTRADAS Y ERRORES GLOBALES
+   5. MANEJO DE RUTAS NO ENCONTRADAS Y ERRORES GLOBALES
    ========================================================================== */
 
 // Manejador 404 para cualquier ruta no mapeada

@@ -6,7 +6,13 @@ API REST profesional y modular para la administración de retiros, desarrollada 
 
 ## 📋 Características Principales
 
-- **Arquitectura en Capas (Layered Architecture):** Separación estricta entre configuración, servidor HTTP, aplicación Express, enrutadores, controladores y servicios.
+- **Acceso a Datos de Alto Rendimiento:** Consultas preparadas (Prepared Statements) con `mysql2/promise` para control total y prevención de inyecciones SQL.
+- **Auto-Aprovisionamiento de Superadministrador (Seed Inicial):** El servidor verifica y crea automáticamente un usuario con rol `root` (máximos privilegios) en su primer arranque.
+- **Autenticación y Autorización Robusta:**
+  - Tokens JWT (JSON Web Tokens) con expiración configurable.
+  - Hashing seguro de contraseñas con `bcryptjs`.
+  - Middleware de control de acceso basado en roles (RBAC: `root`, `coordinador_general`, `tesorero_finanzas`, `logistica_inscripcion`, `lector`).
+- **Arquitectura en Capas (Layered Architecture):** Separación estricta entre configuración, base de datos, middlewares, repositorios, servicios y controladores.
 - **Separación `app.js` y `server.js`:** Facilita la creación de tests de integración con Supertest o Jest sin bloquear puertos de red.
 - **Seguridad Lista para Producción:**
   - Cabeceras HTTP seguras mediante [`helmet`](https://helmetjs.github.io/).
@@ -21,7 +27,7 @@ API REST profesional y modular para la administración de retiros, desarrollada 
 - **Observabilidad:**
   - Logging estructurado con `morgan`.
   - Endpoint de **Health Check** (`/health` y `/api/v1/health`) con métricas de uptime y uso de memoria.
-- **Graceful Shutdown:** Cierre seguro de conexiones HTTP ante señales `SIGTERM` y `SIGINT` (ideal para contenedores Docker y Kubernetes).
+- **Graceful Shutdown:** Cierre seguro de conexiones HTTP y pools de MySQL ante señales `SIGTERM` y `SIGINT`.
 
 ---
 
@@ -35,25 +41,32 @@ API-ADMIN-RETIROS/
 ├── package.json                  # Dependencias y scripts
 ├── README.md                     # Documentación general
 └── src/
-    ├── app.js                    # Configuración de Express (Middlewares, Rutas, Errores)
-    ├── server.js                 # Entrada del servidor HTTP (Listener y Graceful Shutdown)
+    ├── app.js                    # Configuración Express (Middlewares, Rutas, Errores)
+    ├── server.js                 # Listener HTTP, verificación BD, seed root y Graceful Shutdown
     ├── config/
-    │   └── env.js                # Validación y centralización de variables de entorno
+    │   ├── env.js                # Validación y centralización de variables de entorno
+    │   └── swagger.js            # Configuración OpenAPI 3.0 y Swagger UI
+    ├── db/
+    │   ├── pool.js               # Pool de conexiones MySQL2 con mysql2/promise
+    │   ├── initRootUser.js       # Auto-creación de superadministrador inicial con rol 'root'
+    │   └── administrador-retiros-rcc.sql # Esquema SQL relacional
+    ├── models/                   # Capa de Acceso a Datos y Consultas SQL (Modelos)
+    │   └── user.model.js         # Operaciones sobre tabla `usuarios`
+    ├── controllers/              # Controladores de negocio y manejo de peticiones HTTP
+    │   ├── auth.controller.js    # Lógica de login, perfil y cambio de clave
+    │   ├── user.controller.js    # Gestión de usuarios, roles y estados
+    │   └── health.controller.js  # Métricas y estado del servidor
+    ├── routes/                   # Definición de rutas y mapeo de endpoints
+    │   ├── index.js              # Enrutador central (/api/v1)
+    │   ├── auth.routes.js        # Rutas de autenticación
+    │   ├── user.routes.js        # Rutas de usuarios y roles
+    │   └── health.routes.js      # Rutas de comprobación de salud
     ├── middlewares/
+    │   ├── auth.middleware.js    # Autenticación JWT y guardias RBAC por roles
     │   ├── error.middleware.js   # Manejador global de errores
     │   ├── notFound.middleware.js# Manejador de rutas 404
     │   ├── rateLimiter.middleware.js # Limitador de peticiones por IP
     │   └── requestLogger.middleware.js # Logger HTTP (Morgan)
-    ├── modules/                  # Módulos organizados por dominio
-    │   ├── health/               # Verificación de salud y métricas del sistema
-    │   │   ├── health.controller.js
-    │   │   └── health.routes.js
-    │   └── withdrawals/          # Ejemplo de módulo de retiros (Capa Negocio)
-    │       ├── withdrawals.controller.js
-    │       ├── withdrawals.routes.js
-    │       └── withdrawals.service.js
-    ├── routes/
-    │   └── index.js              # Enrutador principal de la API (/api/v1)
     └── utils/
         ├── AppError.js           # Clase base para errores controlados
         ├── apiResponse.js        # Formateador uniforme de respuestas HTTP
@@ -98,19 +111,37 @@ API-ADMIN-RETIROS/
 
 ## 📡 Endpoints Disponibles
 
-### 1. Sistema & Salud
+### 1. Documentación Interactiva (Swagger OpenAPI 3.0)
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/docs` | Redirección amigable a la documentación interactiva |
+| `GET` | `/api/v1/docs` | Interfaz gráfica interactiva de Swagger UI |
+| `GET` | `/api/v1/docs.json` | Especificación OpenAPI 3.0 en formato JSON |
+
+### 2. Sistema & Salud
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
 | `GET` | `/` | Información básica del servicio y estado |
 | `GET` | `/health` | Health check rápido para balanceadores de carga |
 | `GET` | `/api/v1/health` | Health check detallado con métricas de memoria |
 
-### 2. Módulo de Retiros (`/api/v1/withdrawals`)
+### 3. Autenticación (`/api/v1/auth`)
 | Método | Endpoint | Descripción |
 | :--- | :--- | :--- |
-| `GET` | `/api/v1/withdrawals` | Obtiene el listado de retiros registrados |
-| `GET` | `/api/v1/withdrawals/:id` | Obtiene el detalle de un retiro específico |
-| `POST` | `/api/v1/withdrawals` | Registra una nueva solicitud de retiro |
+| `POST` | `/api/v1/auth/login` | Iniciar sesión y obtener token JWT |
+| `GET` | `/api/v1/auth/profile` | Obtener perfil del usuario autenticado (Bearer Token) |
+| `PUT` | `/api/v1/auth/profile` | Actualizar datos del perfil propio (nombre, usuario, email) |
+| `POST` | `/api/v1/auth/change-password` | Modificar contraseña propia (Bearer Token) |
+| `POST` | `/api/v1/auth/logout` | Cerrar sesión y descartar credenciales activas (Bearer Token) |
+
+### 4. Gestión de Usuarios y Roles (`/api/v1/users`)
+| Método | Endpoint | Permisos | Descripción |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/users` | `root`, `coordinador_general` | Listar usuarios paginados |
+| `GET` | `/api/v1/users/:id` | `root`, `coordinador_general` | Detalle de un usuario |
+| `POST` | `/api/v1/users` | Exclusivo `root` | Registrar usuario con rol asignado |
+| `PUT` | `/api/v1/users/:id` | Exclusivo `root` | Modificar datos y rol de un usuario existente |
+| `PATCH` | `/api/v1/users/:id/status` | Exclusivo `root` | Activar o desactivar cuenta |
 
 #### Ejemplo de Solicitud `POST /api/v1/withdrawals`:
 ```json

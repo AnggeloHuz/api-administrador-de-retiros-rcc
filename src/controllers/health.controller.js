@@ -1,10 +1,11 @@
-import { ApiResponse } from '../../utils/apiResponse.js';
-import { env } from '../../config/env.js';
+import { ApiResponse } from '../utils/apiResponse.js';
+import { env } from '../config/env.js';
 
-/**
- * Controlador para la verificación del estado y salud de la API.
- */
 export const healthController = {
+  /**
+   * Endpoint de comprobación del estado del servicio y uso de recursos
+   * GET /health o GET /api/v1/health
+   */
   check(req, res) {
     const memory = process.memoryUsage();
 

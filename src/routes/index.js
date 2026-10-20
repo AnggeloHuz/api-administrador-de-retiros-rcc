@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { healthRoutes } from '../modules/health/health.routes.js';
-import { withdrawalsRoutes } from '../modules/withdrawals/withdrawals.routes.js';
+import { authRoutes } from './auth.routes.js';
+import { userRoutes } from './user.routes.js';
+import { healthRoutes } from './health.routes.js';
 
 const apiRouter = Router();
 
-// Módulos de la API montados bajo el prefijo configurado
+// Montaje de rutas por dominio bajo el prefijo configurado (/api/v1)
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/users', userRoutes);
 apiRouter.use('/health', healthRoutes);
-apiRouter.use('/withdrawals', withdrawalsRoutes);
 
 export { apiRouter };
